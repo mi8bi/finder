@@ -1,51 +1,28 @@
 package main
 
 import (
-	"finder/internal/fileio"
+	"finder/internal/infra"
+	"finder/internal/usecase"
 	"flag"
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 )
 
 func main() {
-	// file path
-	path := flag.String("path", "", "ファイルパスを指定")
-	// ext
-	ext := flag.String("ext", "", "拡張子でフィルタ")
-	// size
-	size := flag.Int64("size", 1000, "サイズ以上のファイルのみ")
-	// パースを実行
+	// フラグ定義
+	pathPtr := flag.String("path", ".", "探索を開始するファイルパス")
+	extPtr := flag.String("ext", "", "抽出する拡張子 (例: .jpg)")
+	sizeKBPtr := flag.Int64("size", 0, "指定したKB以上のファイルのみ表示")
 	flag.Parse()
 
-	// path check
-	if _, err := fileio.IsDir(*path); err != nil {
-		flag.Usage()
-		os.Exit(1)
-	}
-	rootPath, err := filepath.Abs(*path)
-	if err != nil {
-		flag.Usage()
-		os.Exit(1)
-	}
+	repo := &infra.LocalFileSystem{}
+	finder := usecase.NewFileFinder(repo)
 
-	filepath.Walk(rootPath, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return fmt.Errorf("failed filepath.Walk: %v", err)
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if filepath.Ext(path) == *ext && info.Size() >= *size {
-			fmt.Fprintf(
-				os.Stdout,
-				"%s | %d | %s\n",
-				info.Name(),
-				info.Size(),
-				info.ModTime().Format("2006/1/2 15:04:05"),
-			)
-		}
-		return nil
-	})
+	results, _ := finder.Execute(*pathPtr, *extPtr, *sizeKBPtr)
+
+	fmt.Printf("Searching in: %s (Ext: %s, MinSize: %d KB)\n", *pathPtr, *extPtr, *sizeKBPtr)
+	fmt.Println("Name | Size(Bytes) | ModTime")
+	fmt.Println("---------------------------------")
+	for _, f := range results {
+		fmt.Printf("%s | %.1fKB | %s\n", f.Name, float64(f.Size)/1024.0, f.ModTime)
+	}
 }
